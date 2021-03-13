@@ -1,5 +1,5 @@
 [package]
-name = "file-browser"
+name = "core-utils"
 version = "0.1.0"
 authors = ["huansern <aston@outlook.com>"]
 edition = "2018"
