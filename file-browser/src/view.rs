@@ -1,3 +1,5 @@
+use cursive::event::Event;
+use cursive::event::Key::{Down, Left, Right, Up};
 use cursive::theme::{BaseColor, BorderStyle, Color, Palette, Theme};
 use cursive::view::scroll::Scroller;
 use cursive::view::{Nameable, Resizable, Selector};
@@ -7,9 +9,6 @@ use cursive::views::{
 use cursive::{Cursive, CursiveRunnable, Vec2};
 
 use crate::app::App;
-use cursive::event::Event;
-use cursive::event::Key::{Down, Left, Right, Up};
-use std::rc::Rc;
 
 pub fn refresh(siv: &mut Cursive, app: &App, select: &str) -> Result<(), String> {
     {
