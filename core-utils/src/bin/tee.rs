@@ -16,19 +16,18 @@ fn should_append(args: &mut Vec<String>) -> bool {
 }
 
 struct MultiWriter {
-    writers: Vec<Box<dyn Write>>
+    writers: Vec<Box<dyn Write>>,
 }
 
 impl From<Vec<io::Result<File>>> for MultiWriter {
     fn from(files: Vec<io::Result<File>>) -> Self {
         let mut writers = files
             .into_iter()
-            .filter_map(|file| {
-                match file {
-                    Ok(f) => Some(Box::new(f) as Box<dyn Write>),
-                    Err(_) => None
-                }
-            }).collect::<Vec<Box<dyn Write>>>();
+            .filter_map(|file| match file {
+                Ok(f) => Some(Box::new(f) as Box<dyn Write>),
+                Err(_) => None,
+            })
+            .collect::<Vec<Box<dyn Write>>>();
         writers.push(Box::new(io::stdout()));
         MultiWriter { writers }
     }
@@ -62,14 +61,14 @@ fn open_file(path: &str, append_mode: bool) -> io::Result<File> {
         Err(e) => {
             eprintln!("tee: {}: {}", path, e.to_string());
             Err(e)
-        },
+        }
     }
 }
 
 fn copy(reader: &mut Box<dyn Read>, writer: &mut Box<dyn Write>, buf: &mut [u8]) -> io::Result<()> {
     while let Ok(n) = reader.read(buf) {
         if n == 0 {
-            break
+            break;
         }
         writer.write_all(&buf[..n])?;
         writer.flush()?;
@@ -101,7 +100,7 @@ fn main() {
         Err(e) => {
             eprintln!("tee: {}", e.to_string());
             std::process::exit(1);
-        },
+        }
         _ => {}
     }
 }

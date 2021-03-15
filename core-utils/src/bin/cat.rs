@@ -1,10 +1,10 @@
-use std::{fs, io};
 use std::io::{Read, Write};
+use std::{fs, io};
 
 fn copy(reader: &mut Box<dyn Read>, writer: &mut Box<dyn Write>, buf: &mut [u8]) -> io::Result<()> {
     while let Ok(n) = reader.read(buf) {
         if n == 0 {
-            break
+            break;
         }
         writer.write_all(&buf[..n])?;
         writer.flush()?;
@@ -20,7 +20,7 @@ fn read_files(paths: Vec<String>, writer: &mut Box<dyn Write>, buf: &mut [u8]) -
     for path in paths {
         match fs::File::open(path) {
             Ok(file) => copy(&mut (Box::new(file) as Box<dyn Read>), writer, buf)?,
-            Err(e) => return Err(e)
+            Err(e) => return Err(e),
         }
     }
     Ok(())
@@ -40,7 +40,7 @@ fn main() {
         Err(e) => {
             println!("Error reading input: {}", e.to_string());
             std::process::exit(1);
-        },
-        _ => ()
+        }
+        _ => (),
     }
 }

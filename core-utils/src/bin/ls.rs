@@ -19,7 +19,7 @@ fn main() {
     };
     let show_hidden = match std::env::args().nth(2) {
         Some(flag) if flag.eq("--show-hidden") => true,
-        _ => false
+        _ => false,
     };
 
     let dir = fs::read_dir(path).unwrap();
