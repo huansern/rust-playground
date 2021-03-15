@@ -8,7 +8,7 @@ use cursive::{Cursive, CursiveRunnable, Vec2};
 
 use crate::app::App;
 use cursive::event::Event;
-use cursive::event::Key::{Left, Right};
+use cursive::event::Key::{Down, Left, Right, Up};
 use std::rc::Rc;
 
 pub fn refresh(siv: &mut Cursive, app: &App, select: &str) -> Result<(), String> {
@@ -200,6 +200,12 @@ pub fn initialise(siv: &mut CursiveRunnable) {
             s.set_user_data(app);
         }
     });
+
+    siv.add_global_callback('q', |s| s.quit());
+    siv.add_global_callback('h', |s| s.on_event(Event::Key(Left)));
+    siv.add_global_callback('j', |s| s.on_event(Event::Key(Down)));
+    siv.add_global_callback('k', |s| s.on_event(Event::Key(Up)));
+    siv.add_global_callback('l', |s| s.on_event(Event::Key(Right)));
 }
 
 pub fn default_theme(siv: &mut CursiveRunnable) {
