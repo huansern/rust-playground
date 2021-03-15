@@ -66,6 +66,7 @@ pub fn refresh(siv: &mut Cursive, app: &App, select: &str) -> Result<(), String>
         return Ok(());
     }
     items.sort();
+    siv.focus(&Selector::Name("selected"));
 
     {
         let mut selected_index: usize = 0;
@@ -87,7 +88,6 @@ pub fn refresh(siv: &mut Cursive, app: &App, select: &str) -> Result<(), String>
                 .scroll_to(Vec2::new(0, selected_index));
         }
     }
-    siv.focus(&Selector::Name("selected"));
 
     let selected: String = match selected_view.selection() {
         None => "".into(),
