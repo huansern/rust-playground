@@ -1,3 +1,4 @@
+use crate::error::{Error, Kind as ErrorKind, Result};
 use crate::in_memory::bucket::Bucket;
 use crate::in_memory::object::Object;
 use crate::store::Store;
@@ -22,21 +23,21 @@ impl InMemoryStore {
         name: &str,
         reader: &mut Box<dyn Read>,
         replace: bool,
-    ) -> Result<(), ()> {
+    ) -> Result<()> {
         self.create_bucket(bucket);
-        let bucket = match self.buckets.get_mut(bucket) {
-            None => return Err(()),
+        let container = match self.buckets.get_mut(bucket) {
+            None => return Err(Error::new(ErrorKind::BucketNotFound, bucket, name)),
             Some(bucket) => bucket,
         };
-        if !replace && bucket.exist(name) {
-            return Err(());
+        if !replace && container.exist(name) {
+            return Err(Error::new(ErrorKind::ObjectAlreadyExist, bucket, name));
         }
         let mut obj = Object::new(0);
         match io::copy(reader, &mut obj) {
-            Err(_) => return Err(()),
+            Err(_) => return Err(Error::new(ErrorKind::IO, bucket, name)),
             Ok(_) => {}
         }
-        bucket.put(name.into(), obj);
+        container.put(name.into(), obj);
         Ok(())
     }
 }
@@ -55,7 +56,7 @@ impl Store for InMemoryStore {
         }
     }
 
-    fn delete_bucket(&mut self, name: &str) -> Result<(), ()> {
+    fn delete_bucket(&mut self, name: &str) -> Result<()> {
         self.buckets.remove(name.into());
         Ok(())
     }
@@ -72,16 +73,11 @@ impl Store for InMemoryStore {
         bucket: &str,
         name: &str,
         reader: &mut Box<dyn Read>,
-    ) -> Result<(), ()> {
+    ) -> Result<()> {
         self.insert_or_replace_object(bucket, name, reader, false)
     }
 
-    fn put_object(
-        &mut self,
-        bucket: &str,
-        name: &str,
-        reader: &mut Box<dyn Read>,
-    ) -> Result<(), ()> {
+    fn put_object(&mut self, bucket: &str, name: &str, reader: &mut Box<dyn Read>) -> Result<()> {
         self.insert_or_replace_object(bucket, name, reader, true)
     }
 
@@ -96,9 +92,9 @@ impl Store for InMemoryStore {
         }
     }
 
-    fn remove_object(&mut self, bucket: &str, name: &str) -> Result<(), ()> {
+    fn remove_object(&mut self, bucket: &str, name: &str) -> Result<()> {
         let bucket = match self.buckets.get_mut(bucket) {
-            None => return Err(()),
+            None => return Err(Error::new(ErrorKind::BucketNotFound, bucket, name)),
             Some(bucket) => bucket,
         };
         bucket.remove(name);
