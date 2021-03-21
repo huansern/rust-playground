@@ -1,0 +1,10 @@
+[package]
+name = "signal-handling"
+version = "0.1.0"
+authors = ["huansern <aston@outlook.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+signal-hook = { version = "0.3.6", features = ["extended-siginfo"] }
