@@ -4,4 +4,5 @@ members = [
     "core-utils",
     "file-browser",
     "blob-store",
+    "store",
 ]
