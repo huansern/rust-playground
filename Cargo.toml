@@ -5,4 +5,5 @@ members = [
     "file-browser",
     "blob-store",
     "signal-handling",
+    "web-crawler",
 ]
