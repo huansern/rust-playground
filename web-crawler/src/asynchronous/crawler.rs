@@ -36,23 +36,23 @@ async fn start(
     root: Url,
     max_depth: u16,
 ) {
-    let mut pending_job: u16 = 0;
+    let mut task_pending_completion: u16 = 0;
     let mut history: HashSet<String> = HashSet::new();
     history.insert(root.as_str().into());
     task.send(RequestTask::new(root, 0)).unwrap();
-    pending_job += 1;
-    while pending_job > 0 {
+    task_pending_completion += 1;
+    while task_pending_completion > 0 {
         let (depth, urls) = match done.recv().await {
             None => break,
             Some(result) => result,
         };
-        pending_job -= 1;
+        task_pending_completion -= 1;
         if depth < max_depth {
             if let Some(urls) = urls {
                 for url in urls {
                     if history.insert(url.as_str().into()) {
                         task.send(RequestTask::new(url, depth + 1)).unwrap();
-                        pending_job += 1;
+                        task_pending_completion += 1;
                     }
                 }
             }
@@ -62,7 +62,7 @@ async fn start(
 
 pub async fn crawl(root_url: Url, mut max_concurrent_request: usize, max_depth: u16) {
     max_concurrent_request = cmp::max(max_concurrent_request, 1);
-    let client = get_async_client();
+    let async_client = get_async_client();
     let (token_sender, mut token_receiver) = mpsc::channel(max_concurrent_request);
     let (task_sender, mut task_receiver) = mpsc::unbounded_channel();
     let (done_sender, done_receiver) = mpsc::channel(max_concurrent_request);
@@ -78,11 +78,11 @@ pub async fn crawl(root_url: Url, mut max_concurrent_request: usize, max_depth: 
             None => break,
             Some(token) => token,
         };
-        let client_clone = client.clone();
+        let client = async_client.clone();
         let done = done_sender.clone();
         let token_return_channel = token_sender.clone();
         tokio::spawn(async move {
-            worker(client_clone, task, done, token_return_channel, token).await;
+            worker(client, task, done, token_return_channel, token).await;
         });
     }
 }

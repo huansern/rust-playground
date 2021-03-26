@@ -2,37 +2,36 @@ use crate::client::get_blocking_client;
 use crate::task::RequestTask;
 use reqwest::blocking::Client;
 use std::collections::HashSet;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, Mutex};
 use std::{cmp, thread};
 use url::Url;
 
 fn start(task: Sender<RequestTask>, done: Receiver<Option<(u16, Vec<Url>)>>, root: Url) {
-    let mut total_task = 0;
-    let mut completed_task = 0;
+    let mut task_pending_completion = 0;
     let mut history: HashSet<String> = HashSet::new();
     history.insert(root.as_str().into());
     task.send(RequestTask::new(root, 0)).unwrap();
-    total_task += 1;
-    loop {
+    task_pending_completion += 1;
+    while task_pending_completion > 0 {
         let result = match done.recv() {
-            Err(_) => break,
+            Err(err) => {
+                eprintln!("{}", err);
+                return;
+            }
             Ok(r) => r,
         };
-        completed_task += 1;
+        task_pending_completion -= 1;
         if let Some((depth, urls)) = result {
             for url in urls.into_iter() {
                 if history.insert(url.as_str().into()) {
                     task.send(RequestTask::new(url, depth)).unwrap();
-                    total_task += 1;
+                    task_pending_completion += 1;
                 }
             }
         }
-        if completed_task == total_task {
-            println!("Completed all task. Closing task channel...");
-            break;
-        }
     }
+    println!("Completed all task. Closing task channel...");
 }
 
 fn worker(
@@ -72,15 +71,15 @@ fn worker(
     }
 }
 
-pub fn crawl(root_url: Url, mut threads: usize, max_depth: u16) {
-    threads = cmp::max(threads, 1);
+pub fn crawl(root_url: Url, mut max_concurrent_request: usize, max_depth: u16) {
+    max_concurrent_request = cmp::max(max_concurrent_request, 1);
     let blocking_client = get_blocking_client();
-    let (task_sender, task_receiver) = channel();
-    let (done_sender, done_receiver) = channel();
+    let (task_sender, task_receiver) = mpsc::channel();
+    let (done_sender, done_receiver) = mpsc::channel();
     let atomic_task_receiver = Arc::new(Mutex::new(task_receiver));
 
     let mut handles = vec![];
-    for id in 0..threads {
+    for id in 0..max_concurrent_request {
         let task = Arc::clone(&atomic_task_receiver);
         let done = done_sender.clone();
         let client = blocking_client.clone();
