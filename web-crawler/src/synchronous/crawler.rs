@@ -1,18 +1,23 @@
 use crate::client::get_blocking_client;
 use crate::task::RequestTask;
 use reqwest::blocking::Client;
+use std::collections::HashSet;
 use url::Url;
 
 struct Tasks {
     list: Vec<RequestTask>,
     completed: usize,
+    history: HashSet<String>,
 }
 
 impl Tasks {
     fn new(root: RequestTask) -> Self {
+        let mut history = HashSet::new();
+        history.insert(root.url.as_str().into());
         Tasks {
             list: vec![root],
             completed: 0,
+            history,
         }
     }
 
@@ -28,7 +33,13 @@ impl Tasks {
     fn add(&mut self, urls: Vec<Url>, depth: u16) {
         let mut tasks = urls
             .into_iter()
-            .map(|url| RequestTask::new(url, depth))
+            .filter_map(|url| {
+                if self.history.insert(url.as_str().into()) {
+                    Some(RequestTask::new(url, depth))
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<RequestTask>>();
         self.list.append(&mut tasks);
     }

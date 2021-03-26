@@ -2,6 +2,7 @@ use crate::client::get_async_client;
 use crate::task::RequestTask;
 use reqwest::Client;
 use std::cmp;
+use std::collections::HashSet;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use url::Url;
@@ -36,6 +37,8 @@ async fn start(
     max_depth: u16,
 ) {
     let mut pending_job: u16 = 0;
+    let mut history: HashSet<String> = HashSet::new();
+    history.insert(root.as_str().into());
     task.send(RequestTask::new(root, 0)).unwrap();
     pending_job += 1;
     while pending_job > 0 {
@@ -47,8 +50,10 @@ async fn start(
         if depth < max_depth {
             if let Some(urls) = urls {
                 for url in urls {
-                    task.send(RequestTask::new(url, depth + 1)).unwrap();
-                    pending_job += 1;
+                    if history.insert(url.as_str().into()) {
+                        task.send(RequestTask::new(url, depth + 1)).unwrap();
+                        pending_job += 1;
+                    }
                 }
             }
         }

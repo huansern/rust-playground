@@ -1,6 +1,7 @@
 use crate::client::get_blocking_client;
 use crate::task::RequestTask;
 use reqwest::blocking::Client;
+use std::collections::HashSet;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::{cmp, thread};
@@ -9,6 +10,8 @@ use url::Url;
 fn start(task: Sender<RequestTask>, done: Receiver<Option<(u16, Vec<Url>)>>, root: Url) {
     let mut total_task = 0;
     let mut completed_task = 0;
+    let mut history: HashSet<String> = HashSet::new();
+    history.insert(root.as_str().into());
     task.send(RequestTask::new(root, 0)).unwrap();
     total_task += 1;
     loop {
@@ -19,10 +22,13 @@ fn start(task: Sender<RequestTask>, done: Receiver<Option<(u16, Vec<Url>)>>, roo
         completed_task += 1;
         if let Some((depth, urls)) = result {
             for url in urls.into_iter() {
-                task.send(RequestTask::new(url, depth)).unwrap();
-                total_task += 1;
+                if history.insert(url.as_str().into()) {
+                    task.send(RequestTask::new(url, depth)).unwrap();
+                    total_task += 1;
+                }
             }
-        } else if completed_task == total_task {
+        }
+        if completed_task == total_task {
             println!("Completed all task. Closing task channel...");
             break;
         }
