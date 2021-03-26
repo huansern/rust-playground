@@ -1,6 +1,6 @@
 use std::env;
 use url::Url;
-use web_crawler::asynchronous;
+use web_crawler::{asynchronous, url_scheme};
 
 #[tokio::main]
 pub async fn main() {
@@ -12,5 +12,6 @@ pub async fn main() {
         }
         Ok(url) => url,
     };
+    url_scheme::expect_http(&input_url);
     asynchronous::crawler::crawl(input_url, 4, 1).await;
 }

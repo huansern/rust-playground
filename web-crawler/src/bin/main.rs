@@ -2,6 +2,7 @@ use std::env;
 use std::error::Error;
 use url::Url;
 use web_crawler::task::RequestTask;
+use web_crawler::url_scheme;
 
 fn get(url: Url) -> Result<(RequestTask, Vec<Url>), reqwest::Error> {
     let response = reqwest::blocking::get(url.as_str())?;
@@ -19,6 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             std::process::exit(1);
         }
     };
+    url_scheme::expect_http(&input_url);
 
     let (task, urls) = get(input_url)?;
     println!("{}\n", task);
