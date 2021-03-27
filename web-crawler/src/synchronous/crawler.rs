@@ -21,7 +21,8 @@ impl Crawler {
         }
     }
 
-    fn add(&mut self, url: Url, depth: u16) {
+    fn add(&mut self, mut url: Url, depth: u16) {
+        url.set_fragment(None);
         if self.history.insert(url.as_str().into()) {
             self.queue.push_back(RequestTask::new(url, depth));
         }
