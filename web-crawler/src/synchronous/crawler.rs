@@ -1,76 +1,65 @@
 use crate::client::get_blocking_client;
 use crate::task::RequestTask;
 use reqwest::blocking::Client;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use url::Url;
 
-struct Tasks {
-    list: Vec<RequestTask>,
-    completed: usize,
+struct Crawler {
+    http_client: Client,
+    max_depth: u16,
+    queue: VecDeque<RequestTask>,
     history: HashSet<String>,
 }
 
-impl Tasks {
-    fn new(root: RequestTask) -> Self {
-        let mut history = HashSet::new();
-        history.insert(root.url.as_str().into());
-        Tasks {
-            list: vec![root],
-            completed: 0,
-            history,
+impl Crawler {
+    fn new(http_client: Client, max_depth: u16) -> Self {
+        Crawler {
+            http_client,
+            max_depth,
+            queue: VecDeque::new(),
+            history: HashSet::new(),
         }
     }
 
-    fn next(&mut self) -> Option<&mut RequestTask> {
-        let mut next = None;
-        if self.completed < self.list.len() {
-            next = self.list.get_mut(self.completed);
-            self.completed += 1;
+    fn add(&mut self, url: Url, depth: u16) {
+        if self.history.insert(url.as_str().into()) {
+            self.queue.push_back(RequestTask::new(url, depth));
         }
-        next
     }
 
-    fn add(&mut self, urls: Vec<Url>, depth: u16) {
-        let mut tasks = urls
-            .into_iter()
-            .filter_map(|url| {
-                if self.history.insert(url.as_str().into()) {
-                    Some(RequestTask::new(url, depth))
-                } else {
-                    None
+    fn send_request(&self, task: &mut RequestTask) -> Option<Vec<Url>> {
+        match self.http_client.get(task.url.as_str()).send() {
+            Err(err) => {
+                eprintln!("{}", err);
+                None
+            }
+            Ok(response) => {
+                let urls = task.parse_response(response);
+                println!("{}\n", task);
+                urls
+            }
+        }
+    }
+
+    fn start(mut self, root_url: Url) {
+        println!("Crawling begin from {}", root_url.as_str());
+        self.add(root_url, 0);
+        while let Some(mut task) = self.queue.pop_front() {
+            let urls = match self.send_request(&mut task) {
+                None => continue,
+                Some(urls) => urls,
+            };
+            if task.depth < self.max_depth {
+                for url in urls {
+                    self.add(url, task.depth + 1);
                 }
-            })
-            .collect::<Vec<RequestTask>>();
-        self.list.append(&mut tasks);
+            }
+        }
+        println!("Done.");
     }
-}
-
-fn get(client: &Client, task: &mut RequestTask) -> Result<Option<Vec<Url>>, reqwest::Error> {
-    let response = client.get(task.url.as_str()).send()?;
-    Ok(task.parse_response(response))
 }
 
 pub fn crawl(root_url: Url, max_depth: u16) {
-    let client = get_blocking_client();
-    let mut tasks = Tasks::new(RequestTask::new(root_url, 0));
-    loop {
-        let task = match tasks.next() {
-            None => break,
-            Some(task) => task,
-        };
-        let urls = match get(&client, task) {
-            Err(err) => {
-                eprintln!("{}", err);
-                continue;
-            }
-            Ok(urls) => urls,
-        };
-        println!("{}\n", task);
-        if task.depth < max_depth {
-            if let Some(urls) = urls {
-                let depth = task.depth + 1;
-                tasks.add(urls, depth);
-            }
-        }
-    }
+    let crawler = Crawler::new(get_blocking_client(), max_depth);
+    crawler.start(root_url);
 }
