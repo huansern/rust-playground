@@ -4,95 +4,173 @@ use reqwest::blocking::Client;
 use std::collections::HashSet;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
+use std::thread::JoinHandle;
 use std::{cmp, thread};
 use url::Url;
 
-fn start(task: Sender<RequestTask>, done: Receiver<Option<(u16, Vec<Url>)>>, root: Url) {
-    let mut task_pending_completion = 0;
-    let mut history: HashSet<String> = HashSet::new();
-    history.insert(root.as_str().into());
-    task.send(RequestTask::new(root, 0)).unwrap();
-    task_pending_completion += 1;
-    while task_pending_completion > 0 {
-        let result = match done.recv() {
-            Err(err) => {
-                eprintln!("{}", err);
-                return;
-            }
-            Ok(r) => r,
-        };
-        task_pending_completion -= 1;
-        if let Some((depth, urls)) = result {
-            for url in urls.into_iter() {
-                if history.insert(url.as_str().into()) {
-                    task.send(RequestTask::new(url, depth)).unwrap();
-                    task_pending_completion += 1;
+struct Crawler {
+    max_depth: u16,
+    pending_tasks: usize,
+    history: HashSet<String>,
+    task_channel: Sender<RequestTask>,
+    result_channel: Receiver<Option<(Vec<Url>, u16)>>,
+}
+
+impl Crawler {
+    fn new(
+        max_depth: u16,
+        task_channel: Sender<RequestTask>,
+        result_channel: Receiver<Option<(Vec<Url>, u16)>>,
+    ) -> Self {
+        Crawler {
+            max_depth,
+            pending_tasks: 0,
+            history: HashSet::new(),
+            task_channel,
+            result_channel,
+        }
+    }
+
+    fn add(&mut self, url: Url, depth: u16) {
+        if self.history.insert(url.as_str().into()) {
+            self.task_channel
+                .send(RequestTask::new(url, depth))
+                .unwrap();
+            self.pending_tasks += 1;
+        }
+    }
+
+    fn done(&self) -> bool {
+        self.pending_tasks == 0
+    }
+
+    fn start(mut self, root_url: Url) {
+        println!("Crawling begin from {}", root_url.as_str());
+        self.add(root_url, 0);
+        while !self.done() {
+            let result = match self.result_channel.recv() {
+                Err(_) => panic!("Result channel closed before all task result is received."),
+                Ok(result) => result,
+            };
+            self.pending_tasks -= 1;
+            if let Some((urls, mut depth)) = result {
+                if depth < self.max_depth {
+                    depth += 1;
+                    for url in urls {
+                        self.add(url, depth);
+                    }
                 }
+            }
+        }
+        println!("Completed all task. Closing task channel...");
+    }
+}
+
+struct Worker {
+    id: usize,
+    http_client: Client,
+    task_channel: Arc<Mutex<Receiver<RequestTask>>>,
+    result_channel: Sender<Option<(Vec<Url>, u16)>>,
+}
+
+impl Worker {
+    fn new(
+        id: usize,
+        http_client: Client,
+        task_channel: Arc<Mutex<Receiver<RequestTask>>>,
+        result_channel: Sender<Option<(Vec<Url>, u16)>>,
+    ) -> Self {
+        Worker {
+            id,
+            http_client,
+            task_channel,
+            result_channel,
+        }
+    }
+
+    fn start(self) -> JoinHandle<()> {
+        thread::spawn(move || self.work())
+    }
+
+    fn work(self) {
+        loop {
+            let mut task = match self.task_channel.lock().unwrap().recv() {
+                Err(_) => {
+                    println!("Worker #{}: Task channel closed. Returning...", self.id);
+                    break;
+                }
+                Ok(task) => task,
+            };
+            match self.send_request(&mut task) {
+                None => self.result_channel.send(None).unwrap(),
+                Some(urls) => self.result_channel.send(Some((urls, task.depth))).unwrap(),
             }
         }
     }
-    println!("Completed all task. Closing task channel...");
-}
 
-fn worker(
-    id: usize,
-    task: Arc<Mutex<Receiver<RequestTask>>>,
-    done: Sender<Option<(u16, Vec<Url>)>>,
-    client: Client,
-    max_depth: u16,
-) {
-    loop {
-        let mut request_task = match task.lock().unwrap().recv() {
-            Err(_) => {
-                println!("Worker #{}: Task channel closed. Returning...", id);
-                break;
+    fn send_request(&self, task: &mut RequestTask) -> Option<Vec<Url>> {
+        match self.http_client.get(task.url.as_str()).send() {
+            Err(err) => {
+                eprintln!("{}", err);
+                None
             }
-            Ok(task) => task,
-        };
-        let response = match client.get(request_task.url.as_str()).send() {
-            Err(_) => {
-                done.send(None).unwrap();
-                continue;
-            }
-            Ok(r) => r,
-        };
-        let urls = request_task.parse_response(response);
-        println!("Worker #{}:\n{}\n", id, request_task);
-        if request_task.depth < max_depth {
-            match urls {
-                Some(urls) if urls.len() > 0 => {
-                    done.send(Some((request_task.depth + 1, urls))).unwrap();
-                    continue;
-                }
-                _ => {}
+            Ok(response) => {
+                let urls = task.parse_response(response);
+                println!("Worker #{}:\n{}\n", self.id, task);
+                urls
             }
         }
-        done.send(None).unwrap();
+    }
+}
+
+struct WorkerPool {
+    max_concurrent_worker: usize,
+    handles: Vec<JoinHandle<()>>,
+}
+
+impl WorkerPool {
+    fn new(max_concurrent_worker: usize) -> Self {
+        WorkerPool {
+            max_concurrent_worker,
+            handles: Vec::new(),
+        }
+    }
+
+    fn spawn_worker(
+        &mut self,
+        http_client: Client,
+        task_channel: Receiver<RequestTask>,
+        result_channel: Sender<Option<(Vec<Url>, u16)>>,
+    ) {
+        let atomic_task_channel = Arc::new(Mutex::new(task_channel));
+        for id in 0..self.max_concurrent_worker {
+            let worker = Worker::new(
+                id,
+                http_client.clone(),
+                Arc::clone(&atomic_task_channel),
+                result_channel.clone(),
+            );
+            self.handles.push(worker.start());
+        }
+    }
+
+    fn join(self) {
+        for handle in self.handles {
+            handle.join().unwrap();
+        }
     }
 }
 
 pub fn crawl(root_url: Url, mut max_concurrent_request: usize, max_depth: u16) {
     max_concurrent_request = cmp::max(max_concurrent_request, 1);
-    let blocking_client = get_blocking_client();
     let (task_sender, task_receiver) = mpsc::channel();
-    let (done_sender, done_receiver) = mpsc::channel();
-    let atomic_task_receiver = Arc::new(Mutex::new(task_receiver));
+    let (result_sender, result_receiver) = mpsc::channel();
 
-    let mut handles = vec![];
-    for id in 0..max_concurrent_request {
-        let task = Arc::clone(&atomic_task_receiver);
-        let done = done_sender.clone();
-        let client = blocking_client.clone();
-        let handle = thread::spawn(move || worker(id + 1, task, done, client, max_depth));
-        handles.push(handle);
-    }
-    drop(blocking_client);
-    drop(atomic_task_receiver);
-    drop(done_sender);
+    let mut workers = WorkerPool::new(max_concurrent_request);
+    workers.spawn_worker(get_blocking_client(), task_receiver, result_sender);
 
-    start(task_sender, done_receiver, root_url);
+    let crawler = Crawler::new(max_depth, task_sender, result_receiver);
+    crawler.start(root_url);
 
-    for handle in handles {
-        handle.join().unwrap();
-    }
+    workers.join();
 }
