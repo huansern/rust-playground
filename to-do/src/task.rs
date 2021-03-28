@@ -1,3 +1,5 @@
+use crate::error::{Error, Result};
+
 const INCOMPLETE_TASK_PREFIX: &str = "[ ] ";
 const COMPLETED_TASK_PREFIX: &str = "[x] ";
 const SEPARATOR: &str = "\n";
@@ -11,11 +13,11 @@ impl<'a> Tasks<'a> {
         Tasks { inner: vec![] }
     }
 
-    pub fn parse(s: &'a str) -> Result<Self, ()> {
+    pub fn parse(s: &'a str) -> Result<Self> {
         let tasks = s
             .split(SEPARATOR)
             .map(|task| Task::parse(task))
-            .collect::<Result<Vec<Task>, ()>>()?;
+            .collect::<Result<Vec<Task>>>()?;
         Ok(Tasks { inner: tasks })
     }
 
@@ -23,24 +25,24 @@ impl<'a> Tasks<'a> {
         self.inner.push(Task::new(description));
     }
 
-    pub fn edit(&mut self, index: usize, description: &'a str) -> Result<(), ()> {
+    pub fn edit(&mut self, index: usize, description: &'a str) -> Result<()> {
         match self.inner.get_mut(index) {
-            None => Err(()),
+            None => Err(Error::InvalidSequence),
             Some(task) => Ok(task.edit(description)),
         }
     }
 
-    pub fn delete(&mut self, index: usize) -> Result<String, ()> {
+    pub fn delete(&mut self, index: usize) -> Result<String> {
         if index < self.inner.len() {
             Ok(self.inner.remove(index).description.into())
         } else {
-            Err(())
+            Err(Error::InvalidSequence)
         }
     }
 
-    pub fn complete(&mut self, index: usize) -> Result<String, ()> {
+    pub fn complete(&mut self, index: usize) -> Result<String> {
         match self.inner.get_mut(index) {
-            None => Err(()),
+            None => Err(Error::InvalidSequence),
             Some(task) => {
                 task.complete();
                 Ok(task.description.into())
@@ -95,7 +97,7 @@ impl<'a> Task<'a> {
         }
     }
 
-    fn parse(s: &'a str) -> Result<Self, ()> {
+    fn parse(s: &'a str) -> Result<Self> {
         if s.starts_with(INCOMPLETE_TASK_PREFIX) {
             Ok(Task {
                 description: &s[INCOMPLETE_TASK_PREFIX.len()..],
@@ -107,7 +109,7 @@ impl<'a> Task<'a> {
                 completed: true,
             })
         } else {
-            Err(())
+            Err(Error::ParseTask(s.into()))
         }
     }
 
