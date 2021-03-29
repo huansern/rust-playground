@@ -25,10 +25,10 @@ impl<'a> Tasks<'a> {
         self.inner.push(Task::new(description));
     }
 
-    pub fn edit(&mut self, index: usize, description: &'a str) -> Result<()> {
+    pub fn edit(&mut self, index: usize, description: &'a str) -> Result<String> {
         match self.inner.get_mut(index) {
             None => Err(Error::InvalidSequence),
-            Some(task) => Ok(task.edit(description)),
+            Some(task) => Ok(task.edit(description).into()),
         }
     }
 
@@ -111,8 +111,10 @@ impl<'a> Task<'a> {
         }
     }
 
-    fn edit(&mut self, description: &'a str) {
-        self.description = description
+    fn edit(&mut self, description: &'a str) -> &str {
+        let prev = self.description;
+        self.description = description;
+        prev
     }
 
     fn complete(&mut self) {

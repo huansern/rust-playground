@@ -33,59 +33,70 @@ fn open_file(path: &str) -> io::Result<File> {
     OpenOptions::new().read(true).write(true).open(path)
 }
 
-pub fn print(path: &str) -> Result<()> {
+pub fn print(path: &str) -> Result<String> {
     let content = fs::read_to_string(path)?;
     let tasks = Tasks::parse(&content)?;
-    println!("{}", tasks.print_incomplete());
-    Ok(())
+    Ok(tasks.print_incomplete())
 }
 
-pub fn add(path: &str, description: &str) -> Result<()> {
+pub fn add(path: &str, description: &str) -> Result<String> {
     let mut file = create_file(path)?;
     let content = read_content(&mut file)?;
     let mut tasks = Tasks::parse(&content)?;
     tasks.add(description);
     write_content(&mut file, &tasks)?;
-    Ok(())
+    Ok(format!("New to-do: {}", description))
 }
 
-pub fn edit(path: &str, index: usize, description: &str) -> Result<()> {
+pub fn edit(path: &str, index: usize, description: &str) -> Result<String> {
     let mut file = open_file(path)?;
     let content = read_content(&mut file)?;
     let mut tasks = Tasks::parse(&content)?;
-    tasks.edit(index, description)?;
+    let prev = tasks.edit(index, description)?;
     write_content(&mut file, &tasks)?;
-    Ok(())
+    Ok(format!("{} → {}", prev, description))
 }
 
-pub fn delete(path: &str, index: usize) -> Result<()> {
+pub fn delete(path: &str, index: usize) -> Result<String> {
     let mut file = open_file(path)?;
     let content = read_content(&mut file)?;
     let mut tasks = Tasks::parse(&content)?;
-    tasks.delete(index)?;
+    let task = tasks.delete(index)?;
     write_content(&mut file, &tasks)?;
-    Ok(())
+    Ok(format!("Delete to-do: {}", task))
 }
 
-pub fn complete(path: &str, index: usize) -> Result<()> {
+pub fn complete(path: &str, index: usize) -> Result<String> {
     let mut file = open_file(path)?;
     let content = read_content(&mut file)?;
     let mut tasks = Tasks::parse(&content)?;
-    tasks.complete(index)?;
+    let task = tasks.complete(index)?;
     write_content(&mut file, &tasks)?;
-    Ok(())
+    Ok(format!("✔ {}", task))
 }
 
-pub fn prune(path: &str) -> Result<()> {
+pub fn prune(path: &str) -> Result<String> {
     let mut file = open_file(path)?;
     let content = read_content(&mut file)?;
     let mut tasks = Tasks::parse(&content)?;
-    tasks.prune();
+    if tasks.is_empty() {
+        return Ok("".into());
+    }
+    let before = tasks.len();
+    let after = tasks.prune();
     if tasks.is_empty() {
         drop(file);
         fs::remove_file(path)?;
+        Ok(format!(
+            "Removed {} completed to-do(s), no to-do left.",
+            before
+        ))
     } else {
         write_content(&mut file, &tasks)?;
+        Ok(format!(
+            "Removed {} completed to-do(s), {} to-do(s) remaining.",
+            before - after,
+            after
+        ))
     }
-    Ok(())
 }
