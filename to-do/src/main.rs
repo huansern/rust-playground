@@ -1,3 +1,4 @@
+mod app;
 mod error;
 mod task;
 
