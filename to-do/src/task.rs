@@ -63,22 +63,20 @@ impl<'a> Tasks<'a> {
         self.inner.len()
     }
 
-    pub fn print(&self) -> String {
+    pub fn print_incomplete(&self) -> String {
         self.inner
             .iter()
             .filter(|task| !task.completed)
             .enumerate()
-            .map(|(index, task)| task.print(index + 1))
+            .map(|(index, task)| task.sequence_format(index + 1))
             .collect::<Vec<String>>()
             .join(SEPARATOR)
     }
-}
 
-impl<'a> ToString for Tasks<'a> {
-    fn to_string(&self) -> String {
+    pub fn persistence_format(&self) -> String {
         self.inner
             .iter()
-            .map(|task| task.to_string())
+            .map(|task| task.persistence_format())
             .collect::<Vec<String>>()
             .join(SEPARATOR)
     }
@@ -121,13 +119,11 @@ impl<'a> Task<'a> {
         self.completed = true
     }
 
-    fn print(&self, sequence: usize) -> String {
+    fn sequence_format(&self, sequence: usize) -> String {
         format!("{}: {}", sequence, self.description)
     }
-}
 
-impl<'a> ToString for Task<'a> {
-    fn to_string(&self) -> String {
+    fn persistence_format(&self) -> String {
         if self.completed {
             format!("{}{}", COMPLETED_TASK_PREFIX, self.description)
         } else {
