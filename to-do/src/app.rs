@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::task::Tasks;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::{fs, io};
 
 fn get_file_size(file: &File) -> usize {
@@ -34,7 +34,11 @@ fn open_file(path: &str) -> io::Result<File> {
 }
 
 pub fn print(path: &str) -> Result<String> {
-    let content = fs::read_to_string(path)?;
+    let content = match fs::read_to_string(path) {
+        Ok(content) => Ok(content),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok("".into()),
+        Err(err) => Err(err),
+    }?;
     let tasks = Tasks::parse(&content)?;
     Ok(tasks.print_incomplete())
 }

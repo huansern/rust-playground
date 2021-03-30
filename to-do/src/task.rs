@@ -16,6 +16,7 @@ impl<'a> Tasks<'a> {
     pub fn parse(s: &'a str) -> Result<Self> {
         let tasks = s
             .split(SEPARATOR)
+            .filter(|line| !line.is_empty())
             .map(|task| Task::parse(task))
             .collect::<Result<Vec<Task>>>()?;
         Ok(Tasks { inner: tasks })
@@ -66,8 +67,8 @@ impl<'a> Tasks<'a> {
     pub fn print_incomplete(&self) -> String {
         self.inner
             .iter()
-            .filter(|task| !task.completed)
             .enumerate()
+            .filter(|(_, task)| !task.completed)
             .map(|(index, task)| task.sequence_format(index + 1))
             .collect::<Vec<String>>()
             .join(SEPARATOR)
