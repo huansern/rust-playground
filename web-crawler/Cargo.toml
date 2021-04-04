@@ -1,0 +1,14 @@
+[package]
+name = "web-crawler"
+version = "0.1.0"
+authors = ["huansern <aston@outlook.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+reqwest = { version = "0.11.2", features = ["blocking", "gzip", "json"] }
+select = "0.5"
+url = "2.2.1"
+tokio = { version = "1", features = ["full"] }
+clap = "2.33.3"
