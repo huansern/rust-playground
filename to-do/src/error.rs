@@ -5,6 +5,7 @@ use std::{fmt, io, num, result};
 
 pub type Result<T> = result::Result<T, Error>;
 
+#[derive(Debug)]
 pub enum Error {
     Io(io::Error),
     ParseSequence(num::ParseIntError),
